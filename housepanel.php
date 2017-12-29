@@ -363,7 +363,7 @@ function makeThing($i, $kindex, $thesensor, $panelname) {
     // wrap thing in generic thing class and specific type for css handling
     // IMPORTANT - changed tile to the saved index in the master list
     //             so one must now use the id to get the value of "i" to find elements
-    $tc= "<div id=\"t-$i\" tile=\"$kindex\" bid=\"$bid\" type=\"$thingtype\" panel=\"$panelname\" class=\"thing $thingtype" . "-thing" . "\">";
+    $tc= "<div id=\"t-$i\" tile=\"$kindex\" bid=\"$bid\" type=\"$thingtype\" panel=\"$panelname\" class=\"thing $thingtype" . "-thing p_$kindex" . "\">";
 
     // add a hidden field for passing thing type to js
     // $tc.= hidden("type-$i", $thingtype, "type-$i");
@@ -375,7 +375,8 @@ function makeThing($i, $kindex, $thesensor, $panelname) {
     
     // special handling for weather tiles
     if ($thingtype==="weather") {
-        $tc.= "<div aid=\"$i\"  title=\"$thingtype status\" class=\"thingname $thingtype\" id=\"s-$i\">" . $thingname . "<br />" . $thingvalue["city"] . "</div>";
+        $weathername = $thingname . "<br />" . $thingvalue["city"];
+        $tc.= "<div aid=\"$i\"  title=\"$thingtype\" class=\"thingname $thingtype\" id=\"s-$i\"><span class=\"n_$kindex\">" . $weathername . "</span></div>";
         $tc.= putElement($kindex, $i, 0, $thingtype, $thingvalue["temperature"], "temperature");
         $tc.= putElement($kindex, $i, 1, $thingtype, $thingvalue["feelsLike"], "feelsLike");
         // $tc.= putElement($kindex, $i, 2, $thingtype, $thingvalue["city"], "city");
@@ -419,7 +420,7 @@ function makeThing($i, $kindex, $thesensor, $panelname) {
         } else {
             $thingpr = $thingname;
         }
-        $tc.= "<div aid=\"$i\"  title=\"$thingtype status\" class=\"thingname $thingtype\" id=\"s-$i\"><span class=\"N$kindex\">" . $thingpr . "</span></div>";
+        $tc.= "<div aid=\"$i\"  title=\"$thingtype status\" class=\"thingname $thingtype\" id=\"s-$i\"><span class=\"n_$kindex\">" . $thingpr . "</span></div>";
         // create a thing in a HTML page using special tags so javascript can manipulate it
         // multiple classes provided. One is the type of thing. "on" and "off" provided for state
         // for multiple attribute things we provide a separate item for each one
@@ -467,7 +468,7 @@ function putElement($kindex, $i, $j, $thingtype, $tval, $tkey="value", $subtype=
     
     if ($tkey=="heat" || $tkey=="cool" || $tkey=="level" || $tkey=="switchlevel") {
         $tkeyval = $tkey . "-val";
-        $tc.= "<div class=\"$thingtype $tkey\">";
+        $tc.= "<div class=\"$thingtype $tkey p_$kindex\">";
         $tc.= "<div aid=\"$i\" subid=\"$tkey\" title=\"Level Down\" class=\"$tkey-dn\"></div>";
         $tc.= "<div aid=\"$i\" subid=\"$tkey\" title=\"Level = $tval\" class=\"$tkeyval" . $subtype . "\" id=\"a-$i"."-$tkey\">" . $tval . "</div>";
         $tc.= "<div aid=\"$i\" subid=\"$tkey\" title=\"Level Up\" class=\"$tkey-up\"></div>";
@@ -488,7 +489,7 @@ function putElement($kindex, $i, $j, $thingtype, $tval, $tkey="value", $subtype=
         // for music status show a play bar in front of it
         if ($tkey==="musicstatus") {
             // print controls for the player
-            $tc.= "<div class=\"music-controls\">";
+            $tc.= "<div class=\"music-controls p_$kindex\">";
             $tc.= "<div  aid=\"$i\" subid=\"$tkey\" title=\"Previous\" class=\"music-previous\"></div>";
             $tc.= "<div  aid=\"$i\" subid=\"$tkey\" title=\"Pause\" class=\"music-pause\"></div>";
             $tc.= "<div  aid=\"$i\" subid=\"$tkey\" title=\"Play\" class=\"music-play\"></div>";
@@ -505,7 +506,7 @@ function putElement($kindex, $i, $j, $thingtype, $tval, $tkey="value", $subtype=
             $tkeyshow = " ".$tkey;
         }
         // include class for main thing type, the subtype, a sub-key, and a state (extra)
-        $tc.= "<div aid=\"$i\" type=\"$thingtype\"  subid=\"$tkey\" title=\"$tkey\" class=\"$thingtype" . $subtype . $tkeyshow . $extra . "\" id=\"P$kindex\">" . $tval . "</div>";
+        $tc.= "<div aid=\"$i\" type=\"$thingtype\"  subid=\"$tkey\" title=\"$tkey\" class=\"" . $thingtype . $subtype . $tkeyshow . " p_$kindex" . $extra . "\" id=\"a-$i-$tkey" . "\">" . $tval . "</div>";
     }
     return $tc;
 }
