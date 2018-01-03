@@ -19,6 +19,13 @@
  * 
  *
  * Revision History
+ * 1.45       Merge in custom tile editing from Nick ngredient-master branch
+ * 1.44       Tab row hide/show capabilty in kiosk and regular modes
+ *            Added 4 generally customizable tiles to each page for styling
+ *            Fix 1 for bugs in hue lights based on testing thanks to @cwwilson08
+ * 1.43       Added colorTemperature, hue, and saturation support - not fully tested
+ *            Fixed bug in thermostat that caused fan and mode to fail
+ *            Squashed more bugs
  * 1.42       Clean up CSS file to show presence and other things correctly
  *            Change blank and image logic to read from Groovy code
  *            Keep session updated for similar things when they change
@@ -80,7 +87,6 @@ ini_set('max_input_vars', 20);
 
 session_start();
 define('APPNAME', 'House Panel');
-// define('TIMEZONE', 'America/Detroit');
 define('DEBUG', false);
 define('DEBUG2', false);
 define('DEBUG3', false);
@@ -107,7 +113,10 @@ function htmlHeader($skindir="skin-housepanel") {
     $tc.= '<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">';
     $tc.= '<script src="https://code.jquery.com/jquery-1.12.4.js"></script>';
     $tc.= '<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>';
-    
+
+    // load quicktime script for video
+    $tc.= '<script src="ac_quicktime.js"></script>';
+
     // include hack from touchpunch.furf.com to enable touch punch through for tablets
     // $tc.= '<script src="jquery.ui.touch-punch.min.js"></script>';
     
@@ -116,7 +125,12 @@ function htmlHeader($skindir="skin-housepanel") {
         $skindir = "skin-housepanel";
     }
     $tc.= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$skindir/housepanel.css\">";
-    $tc.= "<link rel=\"stylesheet\" type=\"text/css\" href=\"$skindir/customtiles.css\">";
+    
+    // load the custom tile sheet if it exists
+    // note - if it doesn't exist, we will create it and for future page reloads
+    if (file_exists("$skindir/customtiles.css")) {
+        $tc.= "<link id=\"customtiles\" rel=\"stylesheet\" type=\"text/css\" href=\"$skindir/customtiles.css\">";
+    }
     $tc.= '<script type="text/javascript" src="housepanel.js"></script>';  
         // dynamically create the jquery startup routine to handle all types
         $tc.= '<script type="text/javascript">';
@@ -127,7 +141,9 @@ function htmlHeader($skindir="skin-housepanel") {
                             "musicmute","musicstatus", 
                             "music-previous","music-pause","music-play","music-stop","music-next",
                             "level-dn","level-up", "level-val","mode.themode",
-                            "piston.pistonName","valve","routine");
+                            "piston.pistonName","valve","routine",
+                            "hue-up","hue-dn","hue-val","saturation-up","saturation-dn","saturation-val",
+                            "colorTemperature-up","colorTemperature-dn","colorTemperature-val");
         $tc.= '$(document).ready(function(){';
         foreach ($thingtypes as $thing) {
             $tc.= '  setupPage("' . $thing . '");';
@@ -250,7 +266,7 @@ function getAllThings($endpt, $access_token) {
     }
     
     // if a prior call failed then we need to reset the session and reload
-    if (count($allthings) <= 9 && $endpt && $access_token ) {
+    if (count($allthings) <= 2 && $endpt && $access_token ) {
         session_unset();
         
 /*        
@@ -287,6 +303,9 @@ function getAllThings($endpt, $access_token) {
         // TODO - implement an analog clock
         // $allthings["clock|clockanalog"] = array("id" => "clockanalog", "name" => "Analog Clock", "value" => $todaydate, "type" => "clock");
 
+        // add a video tile
+        $allthings["video|vid1"] = array("id" => "vid1", "name" => "Video", "value" => array("name"=>"Sample Video", "url"=>"vid1"), "type" => "video");
+        
         // add a few blank tiles
 //        $allthings["blank|b1x1"] = array("id" => "b1x1", "name" => "Blank", "value" => array("size"=>"b1x1"), "type" => "blank");
 //        $allthings["blank|b1x2"] = array("id" => "b1x2", "name" => "Blank", "value" => array("size"=>"b1x2"), "type" => "blank");
@@ -311,6 +330,10 @@ function processName($thingname, $thingtype) {
     // establish the pattern which is "name <<!tag>> rest of name"
     // which also trims white space from ends and from the tag
     // and if user puts ! in front of tag then it won't be included in the name
+    // *************
+    // this code is disabled because the custom naming is a better approach
+    // *************
+    /*
     $pregpattern = "/^(.*)<<(!{0,1})(.*)>>(.*)$/";
     if ( preg_match($pregpattern, $thingname, $pnames) ) {
         // if ! is first character then don't include subtype
@@ -328,22 +351,25 @@ function processName($thingname, $thingtype) {
             $subtype = " " . trim($subtype);
         } 
     } else {
-        // get rid of 's and split along white space
-        if ( $thingtype!=="weather") {
-            $ignores = array("'s","*","<",">","!","{","}");
-            $lowname = str_replace($ignores, "", strtolower($thingname));
-            $subopts = preg_split("/[\s,;|]+/", $lowname);
-            $subtype = "";
-            $k = 0;
-            foreach ($subopts as $key) {
-                if (strtolower($key) != $thingtype) {
-                    $subtype.= " " . $key;
-                    $k++;
-                }
-                if ($k == 3) break;
+     * 
+     */
+    // get rid of 's and split along white space
+    // but only for tiles that are not weather
+    if ( $thingtype!=="weather") {
+        $ignores = array("'s","*","<",">","!","{","}");
+        $lowname = str_replace($ignores, "", strtolower($thingname));
+        $subopts = preg_split("/[\s,;|]+/", $lowname);
+        $subtype = "";
+        $k = 0;
+        foreach ($subopts as $key) {
+            if (strtolower($key) != $thingtype) {
+                $subtype.= " " . $key;
+                $k++;
             }
+            if ($k == 3) break;
         }
     }
+    // }
     
     return array($thingname, $subtype);
 }
@@ -413,6 +439,40 @@ function makeThing($i, $kindex, $thesensor, $panelname) {
                 $j++;
             }
         }
+    // temporary crude video tag hack - must replace the small.mp4 or small.ogv
+    // with the video stream from your camera source or a video of your choice
+    } else if ( $thingtype === "video") {
+        
+    // add video hack for quicktime support
+        $vidname = $thingvalue["name"];
+        $tkey = "url";
+        $vidname = $thingvalue["url"];
+        $tc.= "<div aid=\"$i\"  title=\"$thingtype status\" class=\"thingname $thingtype\" id=\"s-$i\">" . $thingpr . "</div>";
+        // wrap the video tag in our standard HP div pattern
+        $tc.= "<div aid=\"$i\" type=\"$thingtype\"  subid=\"$tkey\" title=\"$vidname\" class=\"video url\" id=\"a-$i"."-$tkey\">";
+        
+        $tc.= '<video width="369" height="240" autoplay >';
+        $tc.= '  <source src="media/small.mp4" type="video/mp4">';
+        // $tc.= '  <source src="media/last-time-race-start.ogg" type="video/ogg">';
+        $tc.= '<div id="QuickTimeLayer" align="center"></div>';
+        $tc.= '  <script>';
+        $tc.= 'var isIE = /*@cc_on!@*/false || !!document.documentMode;' . 
+              'var isEdge = !isIE && !!window.StyleMedia;' . 
+              'var isChrome = !!window.chrome && !!window.chrome.webstore;';
+  
+        $tc.= " if ( isChrome ) {       QT_WriteOBJECT('media/small.ogv',";
+        $tc.= "                '369px', '240px',            "; // width & height
+        $tc.= "                '',                          "; // required version of the ActiveX control, we're OK with the default value
+        $tc.= "                'scale', 'tofit',            "; // scale to fit element size exactly so resizing works
+        $tc.= "                'autoplay', 'true', ";
+        $tc.= "                'controller', 'true', ";
+        $tc.= "                'qtsrc', 'media/small.ogv', ";
+        $tc.= "                'emb#id', 'qtrtsp_embed', "; // ID for embed tag only
+        $tc.= "                'obj#id', 'qtrtsp_object');  "; // ID for object tag only
+        $tc.= "}        </script>";
+        $tc.= "</video>";
+        $tc.= "</div>";
+        
     } else {
 
         if (strlen($thingname) > 32 ) {
@@ -441,8 +501,7 @@ function makeThing($i, $kindex, $thesensor, $panelname) {
                     $j++;
                 }
             }
-        } 
-        else {
+        } else {
             $tc.= putElement($kindex, $i, 0, $thingtype, $thingvalue, "value", $subtype);
         }
     }
@@ -468,9 +527,9 @@ function putElement($kindex, $i, $j, $thingtype, $tval, $tkey="value", $subtype=
     
     if ($tkey=="heat" || $tkey=="cool" || $tkey=="level" || $tkey=="switchlevel") {
         $tkeyval = $tkey . "-val";
-        $tc.= "<div class=\"$thingtype $tkey p_$kindex\">";
+        $tc.= "<div class=\"$thingtype $tkey" . $subtype . " p_$kindex\">";
         $tc.= "<div aid=\"$i\" subid=\"$tkey\" title=\"Level Down\" class=\"$tkey-dn\"></div>";
-        $tc.= "<div aid=\"$i\" subid=\"$tkey\" title=\"Level = $tval\" class=\"$tkeyval" . $subtype . "\" id=\"a-$i"."-$tkey\">" . $tval . "</div>";
+        $tc.= "<div aid=\"$i\" subid=\"$tkey\" title=\"Level = $tval\" class=\"$tkeyval\" id=\"a-$i"."-$tkey\">" . $tval . "</div>";
         $tc.= "<div aid=\"$i\" subid=\"$tkey\" title=\"Level Up\" class=\"$tkey-up\"></div>";
         $tc.= "</div>";
     } else {
@@ -489,7 +548,7 @@ function putElement($kindex, $i, $j, $thingtype, $tval, $tkey="value", $subtype=
         // for music status show a play bar in front of it
         if ($tkey==="musicstatus") {
             // print controls for the player
-            $tc.= "<div class=\"music-controls p_$kindex\">";
+            $tc.= "<div class=\"music-controls" . $subtype . " p_$kindex\">";
             $tc.= "<div  aid=\"$i\" subid=\"$tkey\" title=\"Previous\" class=\"music-previous\"></div>";
             $tc.= "<div  aid=\"$i\" subid=\"$tkey\" title=\"Pause\" class=\"music-pause\"></div>";
             $tc.= "<div  aid=\"$i\" subid=\"$tkey\" title=\"Play\" class=\"music-play\"></div>";
@@ -513,7 +572,7 @@ function putElement($kindex, $i, $j, $thingtype, $tval, $tkey="value", $subtype=
 
 // this makes a basic call to get the sensor status and return as a formatted table
 // notice the call of $cnt by reference to keep running count
-function getNewPage(&$cnt, $allthings, $roomtitle, $things, $indexoptions) {
+function getNewPage(&$cnt, $allthings, $roomtitle, $things, $indexoptions, $kioskmode) {
     $tc = "";
     $roomname = strtolower($roomtitle);
     $tc.= "<div id=\"$roomname" . "-tab\">";
@@ -540,8 +599,18 @@ function getNewPage(&$cnt, $allthings, $roomtitle, $things, $indexoptions) {
             }
         }
         
+        // include 4 customizable tiles on each page
+        $tc.="<div id=\"custom1-$roomname\" class=\"custom custom1 custom1-$roomname\"></div>";
+        $tc.="<div id=\"custom2-$roomname\" class=\"custom custom2 custom2-$roomname\"></div>";
+        $tc.="<div id=\"custom3-$roomname\" class=\"custom custom3 custom3-$roomname\"></div>";
+        $tc.="<div id=\"custom4-$roomname\" class=\"custom custom4 custom4-$roomname\"></div>";
+        // include a tile to toggle tabs on and off if in kioskmode
+        // but no longer need to display it unless you really want to
+        if ($kioskmode) {
+            $tc.="<div class=\"restoretabs\">Hide Tabs</div>";
+        }
         // add a placeholder dummy to force background if almost empty page
-        if ($thiscnt < 10) {
+        if ($thiscnt < 14) {
             $tc.= '<div class="minheight"> </div>';
         }
        
@@ -688,13 +757,55 @@ function readOptions() {
 function writeOptions($options) {
     $f = fopen("hmoptions.cfg","wb");
     $str =  json_encode($options);
+    fwrite($f, cleanupStr($str));
+    fclose($f);
+}
 
-    // make the file easier to look at
+// make the string easier to look at
+function cleanupStr($str) {
     $str1 = str_replace(",\"",",\r\n\"",$str);
     $str2 = str_replace(":{\"",":{\r\n\"",$str1);
-    fwrite($f, $str2);
+    // $str3 = str_replace("\n","\r\n",$str2);
+    return $str2;
+}
 
-    fclose($f);
+// call to write Custom Css Back to customtiles.css
+function writeCustomCss($skindir, $str = "") {
+    $file = fopen("$skindir/customtiles.css","wb");
+    $fixstr = "/* HousePanel Generated Tile Customization File */\r\n";
+    $fixstr.= "/* ******************************************** */\r\n";
+    $fixstr.= "/* ****** DO NOT EDIT THIS FILE DIRECTLY ****** */\r\n";
+    $fixstr.= "/* ******************************************** */\r\n";
+    fwrite($file, cleanupStr($fixstr));
+    if ( $str && strlen($str) ) {
+        fwrite($file, cleanupStr($str));
+    }
+    fclose($file);
+}
+
+function refactorOptions($allthings) {
+// new routine that renumbers all the things in your options file from 1
+// it will make the new customtiles.css no longer valid so only use once
+// before you customize things
+// TODO: refactor the customtiles.css file as well by reading and writing it
+    
+    $cnt = 0;
+    $oldoptions = readOptions();
+    $options = $oldoptions;
+
+    foreach ($oldoptions["index"] as $thingid => $idx) {
+        $cnt++;
+        foreach ($oldoptions["things"] as $room => $thinglist) {
+            $keys = array_keys($thinglist, $idx);
+            foreach($keys as $key) {
+                $options["things"][$room][$key] = $cnt;
+            }
+            $options["index"][$thingid] = $cnt;
+        }
+    }
+    $options["kiosk"] = "false";
+    writeOptions($options);
+    
 }
 
 function getOptions($allthings) {
@@ -704,7 +815,7 @@ function getOptions($allthings) {
                         "motion", "lock", "thermostat", "music", "valve",
                         "door", "illuminance", "smoke", "water",
                         "weather", "presence", "mode", "piston", "other",
-                        "clock","blank","image");
+                        "clock","blank","image","video");
 
     // generic room setup
     $defaultrooms = array(
@@ -889,7 +1000,7 @@ function mysortfunc($cmpa, $cmpb) {
                         "motion", "lock", "thermostat", "music", "valve",
                         "door", "illuminance", "smoke", "water",
                         "weather", "presence", "mode", "piston", "other",
-                        "clock","blank","image");
+                        "clock","blank","image","video");
     $namea = $cmpa["name"];
     $typea = $cmpa["type"];
     $nameb = $cmpb["name"];
@@ -912,7 +1023,7 @@ function getOptionsPage($options, $retpage, $allthings, $sitename) {
                         "motion", "lock", "thermostat", "temperature", "music", "valve",
                         "door", "illuminance", "smoke", "water",
                         "weather", "presence", "mode", "piston", "other",
-                        "clock","blank","image");
+                        "clock","blank","image","video");
     
     $roomoptions = $options["rooms"];
     $thingoptions = $options["things"];
@@ -948,6 +1059,9 @@ function getOptionsPage($options, $retpage, $allthings, $sitename) {
     $tc.= "<table class=\"headoptions\"><thead>";
     $tc.= "<tr><th class=\"thingname\">" . "Thing Name" . "</th>";
    
+    // add columns for custom titles & icons
+    $tc.= "<th class=\"customedit\">" . "Edit" . "</th>";
+    $tc.= "<th class=\"customname\">" . "Display Name" . "</th>";     
     // list the room names in the proper order
     for ($k=0; $k < count($roomoptions); $k++) {
         // search for a room name index for this column
@@ -990,6 +1104,51 @@ function getOptionsPage($options, $retpage, $allthings, $sitename) {
         $tc.= hidden("i_" .  $thingid, $thingindex);
         $tc.= "</td>";
 
+        // For custom tiles: Only show edit button for types that are working
+        $str_type=$thetype;
+        $str_on="";
+        $str_off="";
+        $str_edit="";
+        switch ($thetype) {
+        
+            case "switch":
+            case "switchlevel":
+            case "bulb":
+            case "light":
+                $str_type="switch";
+                $str_on="on";
+                $str_off="off";
+                break;
+                
+            case "contact":
+            case "door":
+            case "valve":
+                $str_on="open";
+                $str_off="closed";
+                break;
+                
+            case "motion":
+                $str_on="active";
+                $str_off="inactive";
+                break;      
+                         
+            case "lock":
+                $str_on="locked";
+                $str_off="unlocked";
+                break;
+                
+            default:
+            	$str_edit="hidden";
+        }       
+
+        $thingname = $thesensor["name"];
+        $iconflag = "editable " . strtolower($thingname);
+
+        $tc.= "<td class=\"customedit\"><span id=\"btn_$thingindex\" class=\"btn $str_edit\" onclick=\"editTile('$str_type', '$thingname', '$thingindex', '$str_on', '$str_off')\">Edit</span></td>";
+        $tc.= "<td class=\"customname\"><span class=\"n_$thingindex\">$thingname</span></td>";
+        $tc.= "<dialog id=\"edit_Tile\">"; 
+        // $tc.=     "<h3>You shouldn't see this</h3>"; 
+        $tc.= "</dialog>";
         // loop through all the rooms in proper order
         // add the order to the thingid to use later
         for ($k=0; $k < count($roomoptions); $k++) {
@@ -1021,6 +1180,8 @@ function getOptionsPage($options, $retpage, $allthings, $sitename) {
 
     $tc.= "</tbody></table>";
     $tc.= "</div>";   // vertical scroll
+    $tc.= "<div id=\"custom_footer\"><span id=\"saveCss\" class=\"btn\" onclick=\"postCustomStyleSheet()\">Save Customizations</span>";
+    $tc.= "<span id=\"showCssSaved\">Customizations Saved</span></div>";
     $tc.= "<div class=\"processoptions\">";
     $tc.= "<input class=\"submitbutton\" value=\"Save\" name=\"submitoption\" type=\"submit\" />";
     $tc.= "<input class=\"resetbutton\" value=\"Reset\" name=\"canceloption\" type=\"reset\" />";
@@ -1048,7 +1209,7 @@ function processOptions($optarray, $retpage, $allthings=null) {
                         "motion", "lock", "thermostat", "temperature", "music", "valve",
                         "door", "illuminance", "smoke", "water",
                         "weather", "presence", "mode", "piston", "other",
-                        "clock","blank","image");
+                        "clock","blank","image","video");
     
     $oldoptions = readOptions();
     
@@ -1307,10 +1468,20 @@ function processOptions($optarray, $retpage, $allthings=null) {
             case "showoptions":
                 $allthings = getAllThings($endpt, $access_token);
                 $options= getOptions($allthings);
+                // get the custom directory for the active skin
+                $skindir = $options["skin"];
                 $optpage = getOptionsPage($options, $returnURL, $allthings, $sitename);
                 echo htmlHeader($skindir);
                 echo $optpage;
                 echo htmlFooter();
+                break;
+        
+            case "refactor":
+                // this user selectable option will renumber the index
+                $allthings = getAllThings($endpt, $access_token);
+                refactorOptions($allthings);
+                $location = $returnURL;
+                header("Location: $location");
                 break;
         
             case "refresh":
@@ -1326,6 +1497,7 @@ function processOptions($optarray, $retpage, $allthings=null) {
             // an Ajax option to display all the ID value for use in Python and EventGhost
             case "showid":
                 $allthings = getAllThings($endpt, $access_token);
+                $options = getOptions($allthings);
                 $tc = "";
                 $tc.= "<h3>End Points</h3>";
                 $tc.= "<div><a href=\"$returnURL\">Return to HousePanel for $sitename </a></div><br />";
@@ -1335,7 +1507,9 @@ function processOptions($optarray, $retpage, $allthings=null) {
                 $tc.= "<div>url = $returnURL </div>";
                 $tc.= "<table class=\"showid\">";
                 $tc.= "<thead><tr><th class=\"thingname\">" . "Name" . "</th><th class=\"thingvalue\">" . "Thing Value" . 
-                      "</th><th class=\"thingvalue\">" . "Thing id" . "</th><th class=\"thingvalue\">" . "Type" . "</th></tr></thead>";
+                      "</th><th class=\"thingvalue\">" . "Thing id" . 
+                      "</th><th class=\"thingvalue\">" . "Style id" .
+                      "</th><th class=\"thingvalue\">" . "Type" . "</th></tr></thead>";
                 foreach ($allthings as $bid => $thing) {
                     if (is_array($thing["value"])) {
                         $value = "[";
@@ -1346,9 +1520,11 @@ function processOptions($optarray, $retpage, $allthings=null) {
                     } else {
                         $value = $thing["value"];
                     }
+                    $idx = $thing["type"] . "|" . $thing["id"];
                     $tc.= "<tr><td class=\"thingname\">" . $thing["name"] . 
                           "</td><td class=\"thingvalue\">" . $value . 
                           "</td><td class=\"thingvalue\">" . $thing["id"] . 
+                          "</td><td class=\"thingvalue\">" . $options["index"][$idx] . 
                           "</td><td class=\"thingvalue\">" . $thing["type"] . "</td></tr>";
                 }
                 $tc.= "</table>";
@@ -1361,6 +1537,22 @@ function processOptions($optarray, $retpage, $allthings=null) {
             //    echo "Unknown AJAX call useajax = [" . $useajax . "]";
         }
         exit(0);
+    }
+    
+    //Custom Tiles Added AJAX Code
+    // TODO: Integrate this into the existing AJAX and form save ecosystem
+    if(!empty($_POST['cssdata'])){
+        $allthings = getAllThings($endpt, $access_token);
+        $options= getOptions($allthings);
+        $skindir = $options["skin"];
+        if (! $skindir ) {
+            $skindir = "skin-housepanel";
+        }
+        $data = $_POST['cssdata'];
+        writeCustomCss($skindir, $_POST['cssdata']);
+    
+        // reload to show new options
+        header("Location: $returnURL");
     }
     
     // process options submit request
@@ -1400,9 +1592,21 @@ function processOptions($optarray, $retpage, $allthings=null) {
         $thingoptions = $options["things"];
         $roomoptions = $options["rooms"];
         $indexoptions = $options["index"];
+
+        // get the skin directory name or use the default
         $skindir = $options["skin"];
+        if (! $skindir || !file_exists("$skindir/housepanel.css") ) {
+            $skindir = "skin-housepanel";
+        }
         
-        $tc.= '<div id="tabs"><ul>';
+        // check if custom tile CSS is present
+        // if it isn't then refactor the index and create one
+        if ( !file_exists("$skindir/customtiles.css")) {
+            refactorOptions($allthings);
+            writeCustomCss($skindir, "");
+        }
+                
+        $tc.= '<div id="tabs"><ul id="roomtabs">';
         // go through rooms in order of desired display
         for ($k=0; $k< count($roomoptions); $k++) {
             
@@ -1423,6 +1627,8 @@ function processOptions($optarray, $retpage, $allthings=null) {
         $tc.= '</ul>';
         
         $cnt = 0;
+        $kioskmode = ($options["kiosk"] == "true" || $options["kiosk"] == "yes" || $options["kiosk"] == "1");
+
         // changed this to show rooms in the order listed
         // this is so we just need to rewrite order to make sortable permanent
         // for ($k=0; $k< count($roomoptions); $k++) {
@@ -1437,7 +1643,7 @@ function processOptions($optarray, $retpage, $allthings=null) {
             // if ($room !== FALSE) {
             if ( key_exists($room, $thingoptions)) {
                 $things = $thingoptions[$room];
-                $tc.= getNewPage($cnt, $allthings, $room, $things, $indexoptions);
+                $tc.= getNewPage($cnt, $allthings, $room, $things, $indexoptions, $kioskmode);
             }
         }
         
@@ -1450,8 +1656,8 @@ function processOptions($optarray, $retpage, $allthings=null) {
         
         // create button to show the Options page instead of as a Tab
         // but only do this if we are not in kiosk mode
-        if ($options["kiosk"] !== "1") {
-            $tc.= "<div class=\"buttons\">";
+        $tc.= "<div class=\"buttons\">";
+        if ( !$kioskmode ) {
             $tc.= "<form class=\"buttons\" action=\"$returnURL\"  method=\"POST\">";
             $tc.= hidden("useajax", "showoptions");
             $tc.= hidden("type", "none");
@@ -1463,8 +1669,10 @@ function processOptions($optarray, $retpage, $allthings=null) {
             $tc.= hidden("type", "none");
             $tc.= hidden("id", 0);
             $tc.= "<input class=\"submitbutton\" value=\"Refresh\" name=\"submitrefresh\" type=\"submit\" />";
-            $tc.= "</form></div>";
+            $tc.= "</form>";
+            $tc.='<div id="restoretabs" class="restoretabs">Hide Tabs</div>';
         }
+        $tc.='</div>';
    
     } else {
 
