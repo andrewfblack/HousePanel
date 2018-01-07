@@ -17,6 +17,7 @@
  * it displays and enables interaction with switches, dimmers, locks, etc
  * 
  * Revision history:
+ * 01/04/2017 - Fix bulb bug that returned wrong name in the type
  * 12/29/2017 - Changed bulb to colorControl capability for Hue light support
  *              Added support for colorTemperature in switches and lights
  * 12/10/2017 - Added name to each thing query return
